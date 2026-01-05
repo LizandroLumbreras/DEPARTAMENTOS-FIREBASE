@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Productos por Departamento</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0066cc">
+
+<style>
+body{
+  font-family:'Poppins',Arial,sans-serif;
+  background:#f4f6f9;
+  padding:20px;
+  color:#222;
+}
+h1{text-align:center;color:#00416A}
+h2{text-align:center;color:#666;font-weight:normal}
+
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  gap:16px;
+  margin-top:25px;
+}
+.card{
+  background:white;
+  border-radius:14px;
+  padding:18px;
+  box-shadow:0 6px 18px rgba(0,0,0,.12);
+  cursor:pointer;
+  transition:.2s;
+}
+.card:hover{transform:scale(1.03)}
+.card b{font-size:16px}
+.card small{color:#666}
+
+#productosBox{
+  display:none;
+  margin-top:25px;
+}
+.producto{
+  background:white;
+  border-radius:12px;
+  padding:14px;
+  margin-bottom:12px;
+  box-shadow:0 4px 10px rgba(0,0,0,.1);
+}
+.producto b{display:block}
+.producto select{
+  width:100%;
+  padding:8px;
+  margin-top:8px;
+  border-radius:6px;
+  border:1px solid #ccc;
+}
+.btnBack{
+  background:#00416A;
+  color:white;
+  border:none;
+  padding:10px 16px;
+  border-radius:8px;
+  cursor:pointer;
+  margin-bottom:15px;
+}
+footer{
+  margin-top:40px;
+  text-align:center;
+  font-size:13px;
+  color:#777;
+}
+</style>
+</head>
+
+<body>
+
+<h1>📦 Productos por Departamento</h1>
+<h2>PROVEEDORA DE DULCES Y DESECHABLES</h2>
+
+<div id="departamentos" class="grid"></div>
+
+<div id="productosBox">
+  <button class="btnBack" onclick="volver()">⬅ Regresar</button>
+  <h2 id="tituloDepto"></h2>
+  <div id="listaProductos"></div>
+</div>
+
+<footer>Powered by <b>PROVSOFT</b></footer>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore, collection, getDocs, updateDoc, doc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* 🔥 Firebase */
+const firebaseConfig = {
+  apiKey: "AIzaSyCK5nb6u2CGRJ8AB1aPlRn54b97bdeAFeM",
+  authDomain: "inventariopv-643f1.firebaseapp.com",
+  projectId: "inventariopv-643f1",
+  storageBucket: "inventariopv-643f1.firebasestorage.app",
+  messagingSenderId: "96242533231",
+  appId: "1:96242533231:web:aae75a18fbaf9840529e9a"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const contDeptos = document.getElementById("departamentos");
+const boxProductos = document.getElementById("productosBox");
+const listaProductos = document.getElementById("listaProductos");
+const tituloDepto = document.getElementById("tituloDepto");
+
+let productos = [];
+let mapDeptos = {};
+
+/* =============================
+   CARGA INICIAL
+============================= */
+const snap = await getDocs(collection(db,"productos"));
+productos = snap.docs.map(d=>({id:d.id,...d.data()}));
+
+mapDeptos = {};
+productos.forEach(p=>{
+  const d = p.departamento || "SIN DEPARTAMENTO";
+  if(!mapDeptos[d]) mapDeptos[d]=[];
+  mapDeptos[d].push(p);
+});
+
+renderDeptos();
+
+/* =============================
+   UI DEPARTAMENTOS
+============================= */
+function renderDeptos(){
+  contDeptos.innerHTML="";
+  Object.keys(mapDeptos).sort().forEach(dep=>{
+    const c = document.createElement("div");
+    c.className="card";
+    c.innerHTML=`
+      <b>${dep}</b><br>
+      <small>${mapDeptos[dep].length} productos</small>
+    `;
+    c.onclick=()=>verDepto(dep);
+    contDeptos.appendChild(c);
+  });
+}
+
+window.verDepto = dep =>{
+  contDeptos.style.display="none";
+  boxProductos.style.display="block";
+  tituloDepto.textContent = dep;
+  listaProductos.innerHTML="";
+
+  mapDeptos[dep].forEach(p=>{
+    const div=document.createElement("div");
+    div.className="producto";
+    div.innerHTML=`
+      <b>${p.concepto || "SIN CONCEPTO"}</b>
+      Código: ${p.codigoBarra || p.id}<br>
+      <small>Depto actual:</small>
+      <select>
+        ${Object.keys(mapDeptos).sort().map(d=>
+          `<option ${d===p.departamento?"selected":""}>${d}</option>`
+        ).join("")}
+      </select>
+    `;
+    const sel=div.querySelector("select");
+    sel.onchange=()=>cambiarDepto(p, sel.value);
+    listaProductos.appendChild(div);
+  });
+};
+
+window.volver = ()=>{
+  contDeptos.style.display="grid";
+  boxProductos.style.display="none";
+};
+
+/* =============================
+   RECLASIFICAR
+============================= */
+async function cambiarDepto(prod, nuevo){
+  if(prod.departamento===nuevo) return;
+
+  await updateDoc(doc(db,"productos",prod.id),{
+    departamento:nuevo
+  });
+
+  prod.departamento=nuevo;
+
+  // reconstruir mapa
+  mapDeptos={};
+  productos.forEach(p=>{
+    const d=p.departamento||"SIN DEPARTAMENTO";
+    if(!mapDeptos[d]) mapDeptos[d]=[];
+    mapDeptos[d].push(p);
+  });
+
+  renderDeptos();
+  verDepto(nuevo);
+}
+</script>
+
+</body>
+</html>
