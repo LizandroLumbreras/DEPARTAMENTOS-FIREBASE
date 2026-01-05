@@ -2,9 +2,9 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Productos por Departamento</title>
+<title>Productos por Departamento (Activos)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0066cc">
+<meta name="theme-color" content="#00416A">
 
 <style>
 body{
@@ -53,6 +53,7 @@ h2{text-align:center;color:#666;font-weight:normal}
   border-radius:6px;
   border:1px solid #ccc;
 }
+
 .btnBack{
   background:#00416A;
   color:white;
@@ -74,7 +75,7 @@ footer{
 <body>
 
 <h1>📦 Productos por Departamento</h1>
-<h2>PROVEEDORA DE DULCES Y DESECHABLES</h2>
+<h2>Solo productos activos</h2>
 
 <div id="departamentos" class="grid"></div>
 
@@ -89,7 +90,13 @@ footer{
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, collection, getDocs, updateDoc, doc
+  getFirestore,
+  collection,
+  getDocs,
+  query,
+  where,
+  updateDoc,
+  doc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* 🔥 Firebase */
@@ -101,9 +108,13 @@ const firebaseConfig = {
   messagingSenderId: "96242533231",
   appId: "1:96242533231:web:aae75a18fbaf9840529e9a"
 };
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+/* =============================
+   VARIABLES
+============================= */
 const contDeptos = document.getElementById("departamentos");
 const boxProductos = document.getElementById("productosBox");
 const listaProductos = document.getElementById("listaProductos");
@@ -113,16 +124,30 @@ let productos = [];
 let mapDeptos = {};
 
 /* =============================
-   CARGA INICIAL
+   CARGA INICIAL (SOLO ACTIVOS)
 ============================= */
-const snap = await getDocs(collection(db,"productos"));
-productos = snap.docs.map(d=>({id:d.id,...d.data()}));
+const q = query(
+  collection(db, "productos"),
+  where("activo", "==", true)
+);
 
+const snap = await getDocs(q);
+
+productos = snap.docs.map(d => ({
+  id: d.id,
+  ...d.data()
+}));
+
+/* =============================
+   AGRUPAR POR DEPARTAMENTO
+============================= */
 mapDeptos = {};
-productos.forEach(p=>{
-  const d = p.departamento || "SIN DEPARTAMENTO";
-  if(!mapDeptos[d]) mapDeptos[d]=[];
-  mapDeptos[d].push(p);
+productos.forEach(p => {
+  if (p.activo !== true) return; // 🛡️ seguridad extra
+
+  const dep = p.departamento ?? "SIN DEPARTAMENTO";
+  if (!mapDeptos[dep]) mapDeptos[dep] = [];
+  mapDeptos[dep].push(p);
 });
 
 renderDeptos();
@@ -136,7 +161,7 @@ function renderDeptos(){
     const c = document.createElement("div");
     c.className="card";
     c.innerHTML=`
-      <b>${dep}</b><br>
+      <b>Departamento ${dep}</b><br>
       <small>${mapDeptos[dep].length} productos</small>
     `;
     c.onclick=()=>verDepto(dep);
@@ -147,7 +172,7 @@ function renderDeptos(){
 window.verDepto = dep =>{
   contDeptos.style.display="none";
   boxProductos.style.display="block";
-  tituloDepto.textContent = dep;
+  tituloDepto.textContent = "Departamento " + dep;
   listaProductos.innerHTML="";
 
   mapDeptos[dep].forEach(p=>{
@@ -156,10 +181,10 @@ window.verDepto = dep =>{
     div.innerHTML=`
       <b>${p.concepto || "SIN CONCEPTO"}</b>
       Código: ${p.codigoBarra || p.id}<br>
-      <small>Depto actual:</small>
+      <small>Departamento:</small>
       <select>
         ${Object.keys(mapDeptos).sort().map(d=>
-          `<option ${d===p.departamento?"selected":""}>${d}</option>`
+          `<option ${String(d)===String(p.departamento)?"selected":""}>${d}</option>`
         ).join("")}
       </select>
     `;
@@ -175,21 +200,22 @@ window.volver = ()=>{
 };
 
 /* =============================
-   RECLASIFICAR
+   CAMBIAR DEPARTAMENTO
 ============================= */
 async function cambiarDepto(prod, nuevo){
-  if(prod.departamento===nuevo) return;
+  if (String(prod.departamento) === String(nuevo)) return;
 
   await updateDoc(doc(db,"productos",prod.id),{
-    departamento:nuevo
+    departamento: Number(nuevo)
   });
 
-  prod.departamento=nuevo;
+  prod.departamento = Number(nuevo);
 
-  // reconstruir mapa
-  mapDeptos={};
+  // 🔁 reconstruir mapa
+  mapDeptos = {};
   productos.forEach(p=>{
-    const d=p.departamento||"SIN DEPARTAMENTO";
+    if(p.activo !== true) return;
+    const d = p.departamento ?? "SIN DEPARTAMENTO";
     if(!mapDeptos[d]) mapDeptos[d]=[];
     mapDeptos[d].push(p);
   });
